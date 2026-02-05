@@ -1,0 +1,55 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    xvfb \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-x \
+    xdotool \
+    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV DISPLAY=:99
+EXPOSE 8080
+
+
+CMD Xvfb :99 -screen 0 1920x1080x24 & \
+    google-chrome \
+    --no-sandbox \
+    --disable-dev-shm-usage \
+    --disable-gpu \
+    --no-first-run \
+    --no-default-browser-check \
+    --disable-default-apps \
+    --disable-popup-blocking \
+    --disable-translate \
+    --disable-features=TranslateUI \
+    --disable-infobars \
+    --window-size=1920,1080 \
+    --window-position=0,0 \
+    2>/dev/null & \
+    until xdotool search --class chrome > /dev/null 2>&1; do sleep 0.1; done && \   
+    sleep 2 && \
+    gst-launch-1.0 \
+    ximagesrc display-name=:99 use-damage=0 ! \
+    video/x-raw,framerate=30/1 ! \
+    queue ! \
+    videoconvert ! \
+    x264enc tune=zerolatency speed-preset=ultrafast bitrate=2000 key-int-max=30 bframes=0 ! \
+    h264parse ! \
+    mpegtsmux ! \
+    queue ! \
+    tcpserversink host=0.0.0.0 port=8080 sync=false
+
+    # gst-launch-1.0 tcpclientsrc host=localhost port=8080 ! \
+    # tsdemux ! h264parse ! avdec_h264 ! autovideosink
