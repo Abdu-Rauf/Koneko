@@ -1,0 +1,38 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    wget \
+    xvfb \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-x \
+    xdotool \
+    firefox \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV DISPLAY=:99
+EXPOSE 8080
+
+CMD Xvfb :99 -screen 0 1920x1080x24 & \
+    firefox \
+    --no-remote \
+    --new-instance \
+    --window-size=1920,1080 \
+    2>/dev/null & \
+    until xdotool search --class firefox > /dev/null 2>&1; do sleep 0.1; done && \
+    sleep 2 && \
+    gst-launch-1.0 \
+    ximagesrc display-name=:99 use-damage=0 ! \
+    video/x-raw,framerate=30/1 ! \
+    queue ! \
+    videoconvert ! \
+    x264enc tune=zerolatency speed-preset=ultrafast bitrate=2000 key-int-max=30 bframes=0 ! \
+    h264parse ! \
+    mpegtsmux ! \
+    queue ! \
+    tcpserversink host=0.0.0.0 port=8080 sync=false
