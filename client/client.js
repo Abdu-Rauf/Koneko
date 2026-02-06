@@ -9,44 +9,131 @@ const socket = new WebSocket('ws://localhost:8080/ws')
 let peerConnection;
 let dataChannel
 
+function attachInputListeners() {
+    console.log('Attaching input listeners')
+    
+    const video = document.getElementById('display-box')
+    let lastMouseMove = 0
+    const MOUSE_THROTTLE = 16
+    
+    // Mouse movement on video element
+    video.addEventListener('mousemove', (e) => {
+        const now = Date.now()
+        if (now - lastMouseMove < MOUSE_THROTTLE) return
+        const rect = video.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        
+        // Scale to container resolution 
+        const scaleX = 1920 / rect.width
+        const scaleY = 1080 / rect.height
+        
+        const containerX = Math.floor(x * scaleX)
+        const containerY = Math.floor(y * scaleY)
+        
+        console.log('Mouse moved:', containerX, containerY)
+        dataChannel.send(JSON.stringify({
+            type: 'mouse_move',
+            x: containerX,
+            y: containerY
+        }))
+    })
+    
+    // Mouse click on video element
+    video.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        
+        const rect = video.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        
+        const scaleX = 1920 / rect.width
+        const scaleY = 1080 / rect.height
+        
+        const containerX = Math.floor(x * scaleX)
+        const containerY = Math.floor(y * scaleY)
+        
+        console.log('Mouse clicked:', containerX, containerY, 'button:', e.button)
+        dataChannel.send(JSON.stringify({
+            type: 'mouse_click',
+            click: e.button,
+            x: containerX,
+            y: containerY
+        }))
+    })
+    
+    document.addEventListener('keydown', (e) => {
+        e.preventDefault()
+        console.log('Key pressed:', e.key)
+        dataChannel.send(JSON.stringify({
+            type: 'key_press',
+            key: e.key
+        }))
+    })
+    
+    // Prevent right-click menu on video
+    video.addEventListener('contextmenu', (e) => {
+        e.preventDefault()
+    })
+    
+    console.log('Input listeners attached to video element')
+}
+
 socket.onopen = async () =>{
     console.log('WebSocket connected!')
 
     peerConnection = new RTCPeerConnection()
-    dataChannel = peerConnection.createDataChannel('inputs')
 
     // SETTING UP DATA CHANNEL
-    dataChannel.onopen = () => {
-        console.log('Data channel opened')
-        console.log('closing websocket')
-        socket.close()
+    peerConnection.ondatachannel = (event) => {
+        console.log('Data channel recieved')
+        dataChannel = event.channel
 
-        document.getElementById('chrome-btn').addEventListener('click',()=>{
-            console.log('chrome selected')
+        dataChannel.onopen = ()=>{
+            console.log("data channel opened inform server")
+
             dataChannel.send(JSON.stringify({
-                type:'browser_select',
-                browser:'chrome'
-            }));
-        })
-        document.getElementById('firefox-btn').addEventListener('click' , ()=>{
-            console.log('firefox selected')
-            dataChannel.send(JSON.stringify({
-                type:'browser_select',
-                browser:'firefox'
-            }));
-        })
+                type: "dc_ready"
+            }))
+            // socket.close()  // should this shit be closed here?
+
+            // Send Selected Browser
+            const selectBrowser = (Browser) => {
+                console.log(`${Browser} selected`)
+                dataChannel.send(JSON.stringify({
+                    type: 'browser_select',
+                    browser: Browser
+                }))
+                // Change the Video elements Visibility
+                document.getElementById('selection-screen').classList.add('hidden')
+                document.getElementById('streaming-screen').classList.remove('hidden')
+                attachInputListeners()
+            }
+            document.getElementById('chrome-btn').addEventListener('click',()=>selectBrowser('chrome'))
+            document.getElementById('firefox-btn').addEventListener('click' , ()=>selectBrowser('firefox'))
+        }
+
+
+        dataChannel.onmessage = (event) => {
+            console.log('Received via data channel:', event.data)
+        }
+
+        dataChannel.onerror = (error) => {
+            console.error('Data channel error:', error)
+        }
+
+        dataChannel.onclose = () => {
+            console.log('Data channel closed')
+        }
     }
 
-    dataChannel.onmessage = (event) => {
-        console.log('Received via data channel:', event.data)
-    }
-
-    dataChannel.onerror = (error) => {
-        console.error('Data channel error:', error)
-    }
-
-    dataChannel.onclose = () => {
-        console.log('Data channel closed')
+    // Configure recieving video bytes
+    peerConnection.ontrack = (event) => {
+        console.log("Video Track Received", event) 
+        console.log("Streams:", event.streams)       
+        const video = document.getElementById('display-box')
+        video.srcObject = event.streams[0]
+        video.play()
     }
 
     // SEND ICE CANDIDATES TO GO SERVER
@@ -59,15 +146,16 @@ socket.onopen = async () =>{
             }));
         }
     }
-    // CREATE OFFER AND SEND SDP TO GO SERVER
-    const offer = await peerConnection.createOffer()
-    await peerConnection.setLocalDescription(offer)
 
-    console.log('sending offer', offer.sdp) 
-    socket.send(JSON.stringify({
-        type: 'offer',
-        sdp: offer.sdp
-    }))
+    // CREATE OFFER AND SEND SDP TO GO SERVER
+    // const offer = await peerConnection.createOffer()
+    // await peerConnection.setLocalDescription(offer)
+
+    // console.log('sending offer', offer.sdp) 
+    // socket.send(JSON.stringify({
+    //     type: 'offer',
+    //     sdp: offer.sdp
+    // }))
 
     peerConnection.onconnectionstatechange = () => {
         console.log('Peer connection state:', peerConnection.connectionState)
@@ -80,16 +168,38 @@ socket.onopen = async () =>{
         }
     }
 }
-socket.onmessage = (e) =>{
+socket.onmessage = async (e) =>{
     // parse the message
     const msg = JSON.parse(e.data)
 
-    // set remote desc to answer
-    if (msg.type == "answer"){
-        console.log("recieved answer candidate",msg)
-        var rd = new RTCSessionDescription({type:"answer",sdp:msg.sdp})
-        peerConnection.setRemoteDescription(rd)
+    if (msg.type === "offer") {
+        console.log("Received offer from server")
+        
+        await peerConnection.setRemoteDescription(new RTCSessionDescription({
+            type: "offer",
+            sdp: msg.sdp
+        }))
+
+        // dataChannel = peerConnection.createDataChannel('inputs')
+
+        
+        // Create and send answer
+        const answer = await peerConnection.createAnswer()
+        await peerConnection.setLocalDescription(answer)
+        
+        console.log("Sending answer to server")
+        socket.send(JSON.stringify({
+            type: 'answer',
+            sdp: answer.sdp
+        }))
     }
+
+    // // set remote desc to answer
+    // if (msg.type == "answer"){
+    //     console.log("recieved answer candidate",msg)
+    //     var rd = new RTCSessionDescription({type:"answer",sdp:msg.sdp})
+    //     peerConnection.setRemoteDescription(rd)
+    // }
     // add the recieved ice candidates
     if (msg.type == "ice-candidate"){
         console.log("recieved ice candidate",msg)
@@ -100,7 +210,7 @@ socket.onmessage = (e) =>{
 
 socket.onclose = (event) => {
     console.log('WebSocket closed:', event.code, event.reason)
-    // WebSocket closed, but peer connection might still work
+    // WebSocket closed, but peer connection will work
 }
 
 socket.onerror = (error) => {
@@ -128,9 +238,9 @@ function sendTestMessage() {
 window.sendTest = sendTestMessage
 
 // Log client inputs
-video.addEventListener('click',logger.mouseListener.bind(logger))
-video.addEventListener('mousemove',logger.mouseListener.bind(logger))
-document.addEventListener('keydown', logger.keyListener.bind(logger))
+// video.addEventListener('click',logger.mouseListener.bind(logger))
+// video.addEventListener('mousemove',logger.mouseListener.bind(logger))
+// document.addEventListener('keydown', logger.keyListener.bind(logger))
 
 
 

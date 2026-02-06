@@ -1,23 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Koneko</title>
-    <script src="client.js" type="module"></script>
+    <style>
+        .hidden {
+            display: none;
+        }
+    </style>
 </head>
 <body>
-
-    <!-- available browsers -->
-    <div id="browser-selection">
-        <button id="chrome-btn">Launch Chrome</button>
-        <button id="firefox-btn">Launch Firefox</button>
+    <!-- Selection Screen: Starts visible -->
+    <div id="selection-screen">
+        <h1>Select Browser</h1>
+        <button id="chrome-btn">Chrome</button>
+        <button id="firefox-btn">Firefox</button>
     </div>
-
-    <video id="display-box" autoplay playsinline height="500px" width="800px" 
-        style="border: 2px solid red; background-color: black;">
-        Your browser does not support the video tag.
-    </video>
-
+    
+    <!-- Streaming Screen: Starts hidden -->
+    <div id="streaming-screen" class="hidden">;;
+        <p>Browser is running</p>
+        <video id="display-box" autoplay width="1280" height="720"></video>
+    </div>
+    
+    <script src="client.js" type="module"></script>
 </body>
 </html>
