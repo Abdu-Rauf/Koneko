@@ -51,5 +51,4 @@ CMD Xvfb :99 -screen 0 1920x1080x24 & \
     queue ! \
     tcpserversink host=0.0.0.0 port=8080 sync=false
 
-    # gst-launch-1.0 tcpclientsrc host=localhost port=8080 ! \
-    # tsdemux ! h264parse ! avdec_h264 ! autovideosink
+    # gst-launch-1.0 tcpclientsrc host=localhost port=32771 ! decodebin ! videoconvert ! autovideosink

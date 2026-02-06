@@ -12,20 +12,28 @@ RUN apt-get update && apt-get install -y \
     gstreamer1.0-plugins-ugly \
     gstreamer1.0-x \
     xdotool \
-    firefox \
+    software-properties-common \
+    && add-apt-repository -y ppa:mozillateam/ppa \
+    && echo 'Package: *' > /etc/apt/preferences.d/mozilla-firefox \
+    && echo 'Pin: release o=LP-PPA-mozillateam' >> /etc/apt/preferences.d/mozilla-firefox \
+    && echo 'Pin-Priority: 1001' >> /etc/apt/preferences.d/mozilla-firefox \
+    && apt-get update \
+    && apt-get install -y firefox \
     && rm -rf /var/lib/apt/lists/*
 
 ENV DISPLAY=:99
 EXPOSE 8080
 
 CMD Xvfb :99 -screen 0 1920x1080x24 & \
+    sleep 2 && \
     firefox \
     --no-remote \
     --new-instance \
-    --window-size=1920,1080 \
+    --width=1920 \
+    --height=1080 \
+    about:blank \
     2>/dev/null & \
-    until xdotool search --class firefox > /dev/null 2>&1; do sleep 0.1; done && \
-    sleep 2 && \
+    sleep 5 && \
     gst-launch-1.0 \
     ximagesrc display-name=:99 use-damage=0 ! \
     video/x-raw,framerate=30/1 ! \
