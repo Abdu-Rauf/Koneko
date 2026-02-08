@@ -147,15 +147,6 @@ socket.onopen = async () =>{
         }
     }
 
-    // CREATE OFFER AND SEND SDP TO GO SERVER
-    // const offer = await peerConnection.createOffer()
-    // await peerConnection.setLocalDescription(offer)
-
-    // console.log('sending offer', offer.sdp) 
-    // socket.send(JSON.stringify({
-    //     type: 'offer',
-    //     sdp: offer.sdp
-    // }))
 
     peerConnection.onconnectionstatechange = () => {
         console.log('Peer connection state:', peerConnection.connectionState)
@@ -179,9 +170,6 @@ socket.onmessage = async (e) =>{
             type: "offer",
             sdp: msg.sdp
         }))
-
-        // dataChannel = peerConnection.createDataChannel('inputs')
-
         
         // Create and send answer
         const answer = await peerConnection.createAnswer()
@@ -194,12 +182,6 @@ socket.onmessage = async (e) =>{
         }))
     }
 
-    // // set remote desc to answer
-    // if (msg.type == "answer"){
-    //     console.log("recieved answer candidate",msg)
-    //     var rd = new RTCSessionDescription({type:"answer",sdp:msg.sdp})
-    //     peerConnection.setRemoteDescription(rd)
-    // }
     // add the recieved ice candidates
     if (msg.type == "ice-candidate"){
         console.log("recieved ice candidate",msg)
