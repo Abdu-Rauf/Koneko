@@ -25,7 +25,7 @@ socket.onopen = async () =>{
         }))
         peerConnection = setupPeerConnection(socket ,(channel)=>{
             dataChannel = channel
-            attachInputListeners()
+            attachInputListeners(dataChannel)
         })
         // Change the Video elements Visibility
         document.getElementById('selection-screen').classList.add('hidden')

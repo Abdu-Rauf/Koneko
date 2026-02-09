@@ -1,10 +1,11 @@
 export function setupPeerConnection(socket , onDataChannelCreated){
-    peerConnection = new RTCPeerConnection()
 
+    const peerConnection = new RTCPeerConnection()
     // SETTING UP DATA CHANNEL
     peerConnection.ondatachannel = (event) => {
         console.log('Data channel recieved')
-        onDataChannelCreated(event.channel)
+        const dataChannel = event.channel
+        onDataChannelCreated(dataChannel)
         
         dataChannel.onopen = ()=>{
             console.log("data channel opened inform server")
@@ -13,7 +14,6 @@ export function setupPeerConnection(socket , onDataChannelCreated){
                 type: "dc_ready"
             }))
         }
-
 
         dataChannel.onmessage = (event) => {
             console.log('Received via data channel:', event.data)
