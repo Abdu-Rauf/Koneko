@@ -179,29 +179,47 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 		case "mouse_move":
 			if container!=nil{
 				go func(){
+					start := time.Now()
 					err = container.MouseMove(data.X,data.Y)
 					if err!=nil{
 						log.Println("Error moving mouse")
 					}
+					conn.WriteJSON(map[string]interface{}{
+						"type":       "benchmark_rep",
+						"action":     "mouse_move",
+						"latency_us": time.Since(start).Microseconds(),
+					})
 				}()
 			}
 		case "key_press":
 			if container!=nil{
 				go func(){
+					start:=time.Now()
 					err = container.KeyPress(data.Key)
 					if err!=nil{
 						log.Println("Error moving mouse")
 					}
+					conn.WriteJSON(map[string]interface{}{
+						"type":       "benchmark_rep",
+						"action":     "key_press",
+						"latency_us": time.Since(start).Microseconds(),
+					})
 				}()
 			}
 			
 		case "mouse_click":
 			if container!=nil{
 				go func(){
+					start:=time.Now()
 					err = container.MouseClick(data.Click)
 					if err!=nil{
 						log.Println("Error moving mouse")
 					}
+					conn.WriteJSON(map[string]interface{}{
+						"type":       "benchmark-rep",
+						"action":     "mouse_click",
+						"latency_us": time.Since(start).Microseconds(),
+					})
 
 				}()
 			}
