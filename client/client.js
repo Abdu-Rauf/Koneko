@@ -1,196 +1,45 @@
 import InputLogger from './utils/InputLogger.js'
+import { setupPeerConnection } from './utils/peerSetup.js'
+import {signalling } from './utils/signalling.js'
+import {attachInputListeners} from './utils/UserInputs.js'
+
 
 const video = document.getElementById('display-box')
 const logger = new InputLogger(video);
 
-// SIGNALING WITH WEBSOCKET
+// Websocket To Handle Signalling
 
 const socket = new WebSocket('ws://localhost:8080/ws')
 let peerConnection;
 let dataChannel
 
-function attachInputListeners() {
-    console.log('Attaching input listeners')
-    
-    const video = document.getElementById('display-box')
-    let lastMouseMove = 0
-    const MOUSE_THROTTLE = 16
-    
-    // Mouse movement on video element
-    video.addEventListener('mousemove', (e) => {
-        const now = Date.now()
-        if (now - lastMouseMove < MOUSE_THROTTLE) return
-        const rect = video.getBoundingClientRect()
-        const x = e.clientX - rect.left
-        const y = e.clientY - rect.top
-        
-        // Scale to container resolution 
-        const scaleX = 1920 / rect.width
-        const scaleY = 1080 / rect.height
-        
-        const containerX = Math.floor(x * scaleX)
-        const containerY = Math.floor(y * scaleY)
-        
-        console.log('Mouse moved:', containerX, containerY)
-        dataChannel.send(JSON.stringify({
-            type: 'mouse_move',
-            x: containerX,
-            y: containerY
-        }))
-    })
-    
-    // Mouse click on video element
-    video.addEventListener('mousedown', (e) => {
-        e.preventDefault()
-        
-        const rect = video.getBoundingClientRect()
-        const x = e.clientX - rect.left
-        const y = e.clientY - rect.top
-        
-        const scaleX = 1920 / rect.width
-        const scaleY = 1080 / rect.height
-        
-        const containerX = Math.floor(x * scaleX)
-        const containerY = Math.floor(y * scaleY)
-        
-        console.log('Mouse clicked:', containerX, containerY, 'button:', e.button)
-        dataChannel.send(JSON.stringify({
-            type: 'mouse_click',
-            click: e.button,
-            x: containerX,
-            y: containerY
-        }))
-    })
-    
-    document.addEventListener('keydown', (e) => {
-        e.preventDefault()
-        console.log('Key pressed:', e.key)
-        dataChannel.send(JSON.stringify({
-            type: 'key_press',
-            key: e.key
-        }))
-    })
-    
-    // Prevent right-click menu on video
-    video.addEventListener('contextmenu', (e) => {
-        e.preventDefault()
-    })
-    
-    console.log('Input listeners attached to video element')
-}
-
 socket.onopen = async () =>{
     console.log('WebSocket connected!')
 
-    peerConnection = new RTCPeerConnection()
+    const selectBrowser = (Browser) => {
+        console.log(`${Browser} selected`)
 
-    // SETTING UP DATA CHANNEL
-    peerConnection.ondatachannel = (event) => {
-        console.log('Data channel recieved')
-        dataChannel = event.channel
-
-        dataChannel.onopen = ()=>{
-            console.log("data channel opened inform server")
-
-            dataChannel.send(JSON.stringify({
-                type: "dc_ready"
-            }))
-            // socket.close()  // should this shit be closed here?
-
-            // Send Selected Browser
-            const selectBrowser = (Browser) => {
-                console.log(`${Browser} selected`)
-                dataChannel.send(JSON.stringify({
-                    type: 'browser_select',
-                    browser: Browser
-                }))
-                // Change the Video elements Visibility
-                document.getElementById('selection-screen').classList.add('hidden')
-                document.getElementById('streaming-screen').classList.remove('hidden')
-                attachInputListeners()
-            }
-            document.getElementById('chrome-btn').addEventListener('click',()=>selectBrowser('chrome'))
-            document.getElementById('firefox-btn').addEventListener('click' , ()=>selectBrowser('firefox'))
-        }
-
-
-        dataChannel.onmessage = (event) => {
-            console.log('Received via data channel:', event.data)
-        }
-
-        dataChannel.onerror = (error) => {
-            console.error('Data channel error:', error)
-        }
-
-        dataChannel.onclose = () => {
-            console.log('Data channel closed')
-        }
+        socket.send(JSON.stringify({
+            type: 'browser_select',
+            browser: Browser
+        }))
+        peerConnection = setupPeerConnection(socket ,(channel)=>{
+            dataChannel = channel
+            attachInputListeners(dataChannel)
+        })
+        // Change the Video elements Visibility
+        document.getElementById('selection-screen').classList.add('hidden')
+        document.getElementById('streaming-screen').classList.remove('hidden')
     }
+    document.getElementById('chrome-btn').addEventListener('click',()=>selectBrowser('chrome'))
+    document.getElementById('firefox-btn').addEventListener('click' , ()=>selectBrowser('firefox'))
 
-    // Configure recieving video bytes
-    peerConnection.ontrack = (event) => {
-        console.log("Video Track Received", event) 
-        console.log("Streams:", event.streams)       
-        const video = document.getElementById('display-box')
-        video.srcObject = event.streams[0]
-        video.play()
-    }
-
-    // SEND ICE CANDIDATES TO GO SERVER
-    peerConnection.onicecandidate = (e) => {
-        console.log('sending ice candidate', e.candidate)
-        if (e.candidate){
-            socket.send(JSON.stringify({
-                type:'ice-candidate',
-                candidate: e.candidate
-            }));
-        }
-    }
-
-
-    peerConnection.onconnectionstatechange = () => {
-        console.log('Peer connection state:', peerConnection.connectionState)
-        
-        if (peerConnection.connectionState === 'failed' ||
-            peerConnection.connectionState === 'closed' ||
-            peerConnection.connectionState === 'disconnected') {
-            console.log('Peer connection died')
-            // Cleanup or reconnect logic here
-        }
-    }
 }
 socket.onmessage = async (e) =>{
     // parse the message
     const msg = JSON.parse(e.data)
+    signalling(msg,peerConnection,socket)
 
-    if (msg.type === "offer") {
-        console.log("Received offer from server")
-        
-        await peerConnection.setRemoteDescription(new RTCSessionDescription({
-            type: "offer",
-            sdp: msg.sdp
-        }))
-
-        // dataChannel = peerConnection.createDataChannel('inputs')
-
-        
-        // Create and send answer
-        const answer = await peerConnection.createAnswer()
-        await peerConnection.setLocalDescription(answer)
-        
-        console.log("Sending answer to server")
-        socket.send(JSON.stringify({
-            type: 'answer',
-            sdp: answer.sdp
-        }))
-    }
-
-    // add the recieved ice candidates
-    if (msg.type == "ice-candidate"){
-        console.log("recieved ice candidate",msg)
-        var ice = new RTCIceCandidate(msg.candidate)
-        peerConnection.addIceCandidate(ice)
-    }
 }
 
 socket.onclose = (event) => {

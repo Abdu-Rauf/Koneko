@@ -26,7 +26,6 @@ var upgrader = websocket.Upgrader{
 
 type DataChannelInputs struct {
 	Type	string	`json:"type"`
-	Browser string 	`json:"browser,omitempty"`
 	X	int 	`json:"x,omitempty"`
 	Y	int 	`json:"y,omitempty"`
 	Key	string 	`json:"key,omitempty"`
@@ -36,6 +35,7 @@ type DataChannelInputs struct {
 type Server struct {
 	DockerCli *client.Client
 }
+
 func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	var closeOnce sync.Once
@@ -47,12 +47,26 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		log.Println("WebSocket connection established")
 	}
-	// Handle WebRTC signaling here
-	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{})
-	if err != nil {
-		log.Println("Error creating PeerConnection:", err)
+
+	// Signal Channels for closing ws and peer
+	connectionClosed := make(chan struct{})
+	dataChannelReady := make(chan struct{})
+
+	// Necessary for Cleanup
+	var container *Container
+	var cancelStream context.CancelFunc
+
+	var browserMsg struct{
+		Type string `json:"type"`
+		Browser string `json:"browser"`
+	}
+	err = conn.ReadJSON(&browserMsg)
+	if err!=nil{
+		log.Println("Error reading browser selected")
 		return
 	}
+	log.Println("Browser selected:" ,browserMsg.Browser)
+
 	videoTrack, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264},
 		"video",
@@ -60,6 +74,50 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		log.Println("Failed to create video track:", err)
+		return
+	}
+
+	go func(){
+
+		log.Println("Starting Container")
+		containerID,image,streamURL, err := utils.StartContainer(r.Context(),s.DockerCli,browserMsg.Browser)
+
+		if err != nil {
+			log.Println("Failed to start container:", err)
+			return
+		}
+		container = &Container{
+			ID : containerID,
+			Address:streamURL,
+			Image: image,
+		}
+		// Connect server to the Conatiner 
+		err = container.Connect()
+		if err!=nil{
+			log.Println("Error connecting to the container",err)
+			return
+		}
+		log.Println("Container is Ready",container)
+
+		// Create context (holy)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancelStream = cancel
+
+		// start sending video streams to the client
+		go func(){
+			log.Println("Starting stream")
+			err := container.StreamVid(ctx,videoTrack)
+			if err!=nil{
+				log.Println("Video Streaming stopped",err)
+			}
+		}()
+	}()
+
+
+	// Handle WebRTC signaling here
+	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		log.Println("Error creating PeerConnection:", err)
 		return
 	}
 	
@@ -79,13 +137,6 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
-	// Signal Channels for closing ws and peer
-	connectionClosed := make(chan struct{})
-	dataChannelReady := make(chan struct{})
-
-	// Necessary for Cleanup
-	var container *Container
-	var cancelStream context.CancelFunc
 
 
 	dc ,err := peerConnection.CreateDataChannel("inputs", nil)
@@ -109,7 +160,6 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 		default:
 			
 		}
-		log.Println("Received message:", string(msg.Data))
 		
 		// Define structure for incoming data
 		var data DataChannelInputs
@@ -126,41 +176,6 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 		case "dc_ready":
 			log.Println("Data Channel established")
 			close(dataChannelReady)
-		case "browser_select":
-			log.Println("Starting browser:", data.Browser)
-
-			containerID,image,streamURL, err := utils.StartContainer(r.Context(),s.DockerCli,data.Browser)
-
-			if err != nil {
-				log.Println("Failed to start container:", err)
-				return
-			}
-			container = &Container{
-				ID : containerID,
-				Address:streamURL,
-				Image: image,
-			}
-			// Connect server to the Conatiner 
-			err = container.Connect()
-			if err!=nil{
-				log.Println("Error connecting to the container",err)
-				return
-			}
-			log.Println(container)
-
-			// Create context (holy)
-			ctx, cancel := context.WithCancel(context.Background())
-			cancelStream = cancel
-
-			// start sending video streams to the client
-			go func(){
-				log.Println("Starting stream")
-				err := container.StreamVid(ctx,videoTrack)
-				if err!=nil{
-					log.Println("Video Streaming stopped",err)
-				}
-			}()
-				
 		case "mouse_move":
 			if container!=nil{
 				go func(){
@@ -257,6 +272,7 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Closing Websocket, data channel is ready")
 	time.Sleep(200 * time.Millisecond)
 	conn.Close()
+	// check if container is ready , if it is ready then start streaming 
 
 	// Wait till connection is closed by client
 	<-connectionClosed

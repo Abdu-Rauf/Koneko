@@ -35,6 +35,7 @@ func Signalling(conn *websocket.Conn,peerConnection *webrtc.PeerConnection){
 				log.Println("Error setting remote desc",err)
 				continue
 			}
+
 		}
 		if msg.Type == "ice-candidate" {
 			log.Println(msg.Candidate)
