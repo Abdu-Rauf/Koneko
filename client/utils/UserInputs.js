@@ -2,29 +2,27 @@ export function attachInputListeners(dataChannel) {
     console.log('Attaching input listeners')
     
     const video = document.getElementById('display-box')
+    // Container's actual resolution
+    const CONTAINER_WIDTH = 1920
+    const CONTAINER_HEIGHT = 1080
+    
     let lastMouseMove = 0
     const MOUSE_THROTTLE = 16
     
-    // Mouse movement on video element
     video.addEventListener('mousemove', (e) => {
         const now = Date.now()
         if (now - lastMouseMove < MOUSE_THROTTLE) return
+        lastMouseMove = now
+        
         const rect = video.getBoundingClientRect()
-        const x = e.clientX - rect.left
-        const y = e.clientY - rect.top
+        // Map displayed coordinates to container resolution
+        const x = Math.round((e.clientX - rect.left) / rect.width * CONTAINER_WIDTH)
+        const y = Math.round((e.clientY - rect.top) / rect.height * CONTAINER_HEIGHT)
         
-        // Scale to container resolution 
-        const scaleX = 1920 / rect.width
-        const scaleY = 1080 / rect.height
-        
-        const containerX = Math.floor(x * scaleX)
-        const containerY = Math.floor(y * scaleY)
-        
-        console.log('Mouse moved:', containerX, containerY)
         dataChannel.send(JSON.stringify({
             type: 'mouse_move',
-            x: containerX,
-            y: containerY
+            x: x,
+            y: y
         }))
     })
     

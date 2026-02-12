@@ -312,6 +312,9 @@ func main() {
 	myServer := &Server{
 		DockerCli:cli,
 	}
+	
+	fs := http.FileServer(http.Dir("../client"))
+    http.Handle("/", fs)
 
 	http.HandleFunc("/ws", myServer.wsHandler)
 	http.ListenAndServe(":8080", nil)
