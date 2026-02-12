@@ -1,11 +1,9 @@
-import InputLogger from './utils/InputLogger.js'
 import { setupPeerConnection } from './utils/peerSetup.js'
 import {signalling } from './utils/signalling.js'
 import {attachInputListeners} from './utils/UserInputs.js'
 
 
 const video = document.getElementById('display-box')
-const logger = new InputLogger(video);
 
 // Websocket To Handle Signalling
 
@@ -51,14 +49,6 @@ socket.onerror = (error) => {
     console.error('WebSocket error:', error)
 }
 
-function InputStream(data){
-    if (dataChannel && dataChannel.readyState==='open'){
-        dataChannel.send(JSON.stringify(data))
-    }
-    else{
-        console.warn('Data channel not read, state:', dataChannel?.readyState)
-    }
-}
 function sendTestMessage() {
     if (dataChannel && dataChannel.readyState === 'open') {
         dataChannel.send('Hello from test!')
@@ -71,55 +61,7 @@ function sendTestMessage() {
 
 window.sendTest = sendTestMessage
 
-// Log client inputs
-// video.addEventListener('click',logger.mouseListener.bind(logger))
-// video.addEventListener('mousemove',logger.mouseListener.bind(logger))
-// document.addEventListener('keydown', logger.keyListener.bind(logger))
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // window.exportInputLogs = () => console.log(logger.exportLogs());
-// // window.showLogs = () => console.log(logger.getLogs());

@@ -4,23 +4,55 @@
     <meta charset="UTF-8">
     <title>Koneko</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+
         .hidden {
-            display: none;
+            display: none !important;
+        }
+
+        #selection-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: white;
+        }
+
+        #streaming-screen {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #display-box {
+            width: 100vw;
+            height: 100vh;
+            object-fit: fill;
         }
     </style>
 </head>
 <body>
-    <!-- Selection Screen: Starts visible -->
+    <!-- Selection Screen -->
     <div id="selection-screen">
         <h1>Select Browser</h1>
         <button id="chrome-btn">Chrome</button>
         <button id="firefox-btn">Firefox</button>
     </div>
     
-    <!-- Streaming Screen: Starts hidden -->
-    <div id="streaming-screen" class="hidden">;;
-        <p>Browser is running</p>
-        <video id="display-box" autoplay width="1280" height="720"></video>
+    <!-- Streaming Screen -->
+    <div id="streaming-screen" class="hidden">
+        <video id="display-box" autoplay muted playsinline></video>
     </div>
     
     <script src="client.js" type="module"></script>
