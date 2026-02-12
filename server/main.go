@@ -80,7 +80,7 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	go func(){
 
 		log.Println("Starting Container")
-		containerID,image,streamURL, err := utils.StartContainer(r.Context(),s.DockerCli,browserMsg.Browser)
+		containerID,image,streamURL, err := utils.StartContainer(context.Background(),s.DockerCli,browserMsg.Browser)
 
 		if err != nil {
 			log.Println("Failed to start container:", err)
