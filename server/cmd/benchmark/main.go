@@ -4,12 +4,23 @@ import (
 	"log"	
 	"github.com/gorilla/websocket"
 	"time"
-	// "github.com/docker/docker/client"
+    "os"
 )
 
-
+var videoStarted = make(chan struct{})
 func main(){
+    
+    // create csv file writer
+    f, err := os.Create("client_results.csv")
+    if err != nil {
+        log.Fatal("Could not create CSV file")
+    }
+    defer f.Close()
 
+    // Write the Header
+    f.WriteString("timestamp,seq,latency_ms,drift_ms\n")
+
+    // connect to server and select browser
     conn,_,err:= websocket.DefaultDialer.Dial("ws://localhost:8080/ws",nil)
     if err!=nil{
         log.Println("Error connecting to Koneko")
@@ -20,15 +31,21 @@ func main(){
         "browser":"chrome",
     })
 
-    pc,err := PeerSetup(conn)
+    // webrtc setup
+    pc,err := PeerSetup(conn,f)
     if err!=nil{
         log.Println("Error Creating Peer Connection",err)
     }
     go Signalling(conn,pc)
     dc := <-pc.DCReady
-    log.Println("DataChannel Ready")
-    _ = dc
+    <-videoStarted
 
+    // wait for server to start streaming
+    log.Println("Soaking for 5 seconds...")
+    time.Sleep(5 * time.Second)
+    SimulateMouse(dc)
+
+    // Cleanup
     log.Println("Closing data channel...")
     dc.Close()
     time.Sleep(500 * time.Millisecond) 
@@ -36,23 +53,5 @@ func main(){
     log.Println("Closing peer connection...")
     pc.PeerConnection.Close()
     time.Sleep(500 * time.Millisecond)
-
-    // go func (){
-
-    //     _,msg,err:= conn.ReadMessage()
-
-    //     var response struct {
-    //         Type   string `json:"type"`
-    //         Action  string `json:"action"`
-    //         LatencyUs float64 `json:"latency_us"`
-    //     }
-
-    //     json.Unmarshal(msg,&response)
-
-
-        
-    // }
-
-
 
 }
