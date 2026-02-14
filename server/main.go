@@ -11,6 +11,7 @@ import (
 	"context"
 	"time"
 	"github.com/docker/docker/client"
+	"fmt"
 )
 
 
@@ -30,6 +31,8 @@ type DataChannelInputs struct {
 	Y	int 	`json:"y,omitempty"`
 	Key	string 	`json:"key,omitempty"`
 	Click	int `json:"click,omitempty"`
+	Seq 	int `json:"seq,omitempty"`
+	Ts 		int64 `json:"ts,omitempty"`
 }
 
 type Server struct {
@@ -184,11 +187,12 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 					if err!=nil{
 						log.Println("Error moving mouse")
 					}
-					conn.WriteJSON(map[string]interface{}{
-						"type":       "benchmark_rep",
-						"action":     "mouse_move",
-						"latency_us": time.Since(start).Microseconds(),
-					})
+					msg := fmt.Sprintf(`{"type":"benchmark_ack","latency":%d,"seq":%d,"ts":%d}`, 
+						time.Since(start).Microseconds(), 
+						data.Seq, 
+						data.Ts,
+					)
+					dc.SendText(msg)
 				}()
 			}
 		case "key_press":
@@ -199,11 +203,12 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 					if err!=nil{
 						log.Println("Error moving mouse")
 					}
-					conn.WriteJSON(map[string]interface{}{
-						"type":       "benchmark_rep",
-						"action":     "key_press",
-						"latency_us": time.Since(start).Microseconds(),
-					})
+					msg := fmt.Sprintf(`{"type":"benchmark_ack","latency":%d,"seq":%d,"ts":%d}`, 
+						time.Since(start).Microseconds(), 
+						data.Seq, 
+						data.Ts,
+					)
+					dc.SendText(msg)
 				}()
 			}
 			
@@ -215,11 +220,12 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 					if err!=nil{
 						log.Println("Error moving mouse")
 					}
-					conn.WriteJSON(map[string]interface{}{
-						"type":       "benchmark-rep",
-						"action":     "mouse_click",
-						"latency_us": time.Since(start).Microseconds(),
-					})
+					msg := fmt.Sprintf(`{"type":"benchmark_ack","latency":%d,"seq":%d,"ts":%d}`, 
+						time.Since(start).Microseconds(), 
+						data.Seq, 
+						data.Ts,
+					)
+					dc.SendText(msg)
 
 				}()
 			}
