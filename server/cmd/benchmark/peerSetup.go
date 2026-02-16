@@ -76,7 +76,7 @@ func PeerSetup(conn *websocket.Conn ,csvFile *os.File) (*PeerSession, error) {
             return
         }
         once.Do(func() {
-            log.Println("First packet received. Pipeline is hot.")
+            log.Println("First packet received..")
             close(videoStarted)
         })
         for {
@@ -100,6 +100,7 @@ func PeerSetup(conn *websocket.Conn ,csvFile *os.File) (*PeerSession, error) {
 
     pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
         log.Println("Peer connection state:", state.String())
+        return
     })
 
     return session, nil

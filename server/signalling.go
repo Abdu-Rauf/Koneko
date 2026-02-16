@@ -1,4 +1,4 @@
-package utils
+package main
 
 import (
     "log"
@@ -15,8 +15,24 @@ type SignalInfo struct {
 
 func Signalling(conn *websocket.Conn,peerConnection *webrtc.PeerConnection){
 	for {
+
 		var msg SignalInfo
-		err := conn.ReadJSON(&msg)
+		offer , err := peerConnection.CreateOffer(nil)
+		if err!=nil{
+			log.Println("Error creating offer",err)
+			return
+		}
+		err = peerConnection.SetLocalDescription(offer)
+		if err!=nil{
+			log.Println("Failed to set local description")
+			return
+		}
+		conn.WriteJSON(SignalInfo{
+			Type:"offer",
+			Sdp: offer.SDP,
+		})
+
+		err = conn.ReadJSON(&msg)
 		if err != nil {
 			log.Println("Read error:", err)
 			break

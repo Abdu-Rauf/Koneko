@@ -1,8 +1,6 @@
 package main
 
 import (
-	"github.com/Abdu-Rauf/koneko/utils"
-	"encoding/json"
 	"log"
 	"net/http"
 	"sync"	
@@ -11,7 +9,6 @@ import (
 	"context"
 	"time"
 	"github.com/docker/docker/client"
-	"fmt"
 )
 
 
@@ -24,17 +21,6 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: CheckDomain,
 }
 
-
-type DataChannelInputs struct {
-	Type	string	`json:"type"`
-	X	int 	`json:"x,omitempty"`
-	Y	int 	`json:"y,omitempty"`
-	Key	string 	`json:"key,omitempty"`
-	Click	int `json:"click,omitempty"`
-	Seq 	int `json:"seq,omitempty"`
-	Ts 		int64 `json:"ts,omitempty"`
-}
-
 type Server struct {
 	DockerCli *client.Client
 }
@@ -42,18 +28,19 @@ type Server struct {
 func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	var closeOnce sync.Once
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println("Upgrade error:", err)
-		http.Error(w, "Failed to upgrade to websocket", http.StatusInternalServerError)
+
+	// Connect for signalling
+	conn,err:= SignalSocket(w,r)
+	if err!=nil{
+		log.Println("Error in establishing ws connection")
 		return
-	} else {
-		log.Println("WebSocket connection established")
 	}
+	log.Println("Websocket connected")
 
 	// Signal Channels for closing ws and peer
 	connectionClosed := make(chan struct{})
 	dataChannelReady := make(chan struct{})
+	// containerReady := make(chan struct{})
 
 	// Necessary for Cleanup
 	var container *Container
@@ -70,6 +57,8 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Println("Browser selected:" ,browserMsg.Browser)
 
+
+	// Add video Track before creating Peer
 	videoTrack, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264},
 		"video",
@@ -80,252 +69,54 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Start Container Setup In a Routine
 	go func(){
-
-		log.Println("Starting Container")
-		containerID,image,streamURL, err := utils.StartContainer(context.Background(),s.DockerCli,browserMsg.Browser)
-
-		if err != nil {
-			log.Println("Failed to start container:", err)
-			return
-		}
-		container = &Container{
-			ID : containerID,
-			Address:streamURL,
-			Image: image,
-		}
-		// Connect server to the Conatiner 
-		err = container.Connect()
+		c,cs,err := ContainerSetup(videoTrack,browserMsg.Browser,s.DockerCli)
 		if err!=nil{
-			log.Println("Error connecting to the container",err)
+			log.Println("Error Setting Up Container")
+			conn.Close()
 			return
 		}
-		log.Println("Container is Ready",container)
-
-		// Create context (holy)
-		ctx, cancel := context.WithCancel(context.Background())
-		cancelStream = cancel
-
-		// start sending video streams to the client
-		go func(){
-			log.Println("Starting stream")
-			err := container.StreamVid(ctx,videoTrack)
-			if err!=nil{
-				log.Println("Video Streaming stopped",err)
-			}
-		}()
+		container = c
+		cancelStream = cs
 	}()
 
 
-	// Handle WebRTC signaling here
-	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{})
-	if err != nil {
-		log.Println("Error creating PeerConnection:", err)
-		return
-	}
-	
-	rtpSender, err := peerConnection.AddTrack(videoTrack) 
-	if err != nil {
-		log.Println("Failed to add track:", err)
-		return
-	}
-	
-	// is this necessary to add??
-	go func() {
-		rtcpBuf := make([]byte, 1500)
-		for {
-			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
-				log.Println("RTCP reader stopped:", rtcpErr)
-				return
-			}
-		}
-	}()
-
-
-	dc ,err := peerConnection.CreateDataChannel("inputs", nil)
+	// Setup Peer Before Signalling and Create DataChannel
+	peer, err := PeerSetup(conn,videoTrack,connectionClosed,&closeOnce)
 	if err!=nil{
-		log.Println("Error craeting DataChannel",err)
+		log.Println("Error setting Up peers")
+		conn.Close()
 		return
 	}
-	log.Println("Server created data channel")
-
-	dc.OnOpen(func() {
-		log.Println("Data channel opened through server")
 	
-	})
+	// Attach DataChannel Listeners For User Input Forwarding
+	AttachDcListeners(
+		peer.DC,
+		&container,
+		dataChannelReady,
+		connectionClosed,
+		&closeOnce,
+	)
 	
-	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-
-		select{
-		case <- connectionClosed:
-			log.Println("Container no Longer Connected")
-			return
-		default:
-			
-		}
-		
-		// Define structure for incoming data
-		var data DataChannelInputs
-		
-		// Unmarshal JSON string into struct
-		err := json.Unmarshal(msg.Data, &data)
-		if err != nil {
-			log.Println("Error parsing message:", err)
-			return
-		}
-		
-		// Launch the container based on selected browser image
-		switch data.Type {
-		case "dc_ready":
-			log.Println("Data Channel established")
-			close(dataChannelReady)
-		case "mouse_move":
-			if container!=nil{
-				go func(){
-					start := time.Now()
-					err = container.MouseMove(data.X,data.Y)
-					if err!=nil{
-						log.Println("Error moving mouse")
-					}
-					msg := fmt.Sprintf(`{"type":"benchmark_ack","latency":%d,"seq":%d,"ts":%d}`, 
-						time.Since(start).Microseconds(), 
-						data.Seq, 
-						data.Ts,
-					)
-					dc.SendText(msg)
-				}()
-			}
-		case "key_press":
-			if container!=nil{
-				go func(){
-					start:=time.Now()
-					err = container.KeyPress(data.Key)
-					if err!=nil{
-						log.Println("Error moving mouse")
-					}
-					msg := fmt.Sprintf(`{"type":"benchmark_ack","latency":%d,"seq":%d,"ts":%d}`, 
-						time.Since(start).Microseconds(), 
-						data.Seq, 
-						data.Ts,
-					)
-					dc.SendText(msg)
-				}()
-			}
-			
-		case "mouse_click":
-			if container!=nil{
-				go func(){
-					start:=time.Now()
-					err = container.MouseClick(data.Click)
-					if err!=nil{
-						log.Println("Error moving mouse")
-					}
-					msg := fmt.Sprintf(`{"type":"benchmark_ack","latency":%d,"seq":%d,"ts":%d}`, 
-						time.Since(start).Microseconds(), 
-						data.Seq, 
-						data.Ts,
-					)
-					dc.SendText(msg)
-
-				}()
-			}
-		default:
-			log.Println("Unkown message type",data.Type)
-
-
-		}
-	})
-	
-	dc.OnClose(func() {
-		log.Println("Data channel closed")
-		closeOnce.Do(func() {
-			close(connectionClosed) 
-		})
-	})
-	
-	dc.OnError(func(err error) {
-		log.Println("Data channel error:", err)
-	})
-
-	offer , err := peerConnection.CreateOffer(nil)
-	if err!=nil{
-		log.Println("Error creating offer",err)
-		return
-	}
-	err = peerConnection.SetLocalDescription(offer)
-	if err!=nil{
-		log.Println("Failed to set local description")
-		return
-	}
-	conn.WriteJSON(utils.SignalInfo{
-		Type:"offer",
-		Sdp: offer.SDP,
-	})
-    
-
-	// Send ICE candidates to client
-	peerConnection.OnICECandidate(func(cd *webrtc.ICECandidate) {
-		if cd != nil {
-			log.Println("Sending ICE candidate to client:", cd.ToJSON())
-			conn.WriteJSON(utils.SignalInfo{
-				Type:      "ice-candidate",
-				Candidate: cd.ToJSON(), 
-			})
-		}
-	})
-
-	// Set up watcher
-	peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		log.Printf("State: %s\n", state.String())
-		// If connection dies, send signal
-		if state == webrtc.PeerConnectionStateFailed || 
-			state == webrtc.PeerConnectionStateClosed ||
-			state == webrtc.PeerConnectionStateDisconnected {
-
-				closeOnce.Do(func(){
-					close(connectionClosed) // Send dataChannel closed signal
-				})  
-		}
-	})
 
 	// Read messages from websocket
-	go utils.Signalling(conn,peerConnection)
+	go Signalling(conn,peer.PC)
 
 	// Wait for dc to be ready then close the ws
 	<-dataChannelReady
 	log.Println("Closing Websocket, data channel is ready")
 	time.Sleep(200 * time.Millisecond)
 	conn.Close()
-	// check if container is ready , if it is ready then start streaming 
 
 	// Wait till connection is closed by client
 	<-connectionClosed
 	log.Println("Connection closed , clean up")
 
-	// Cancel video streaming
-	if cancelStream!=nil{
-		log.Println("Closing Video Stream")
-		cancelStream()
-		
-	}
-
-	// save session info 
-	if container!=nil{
-		log.Println("Save session history")
-	}
-	if container != nil {
-		if container.Conn != nil {
-			log.Println("Closing the tcp connection")
-			container.Conn.Close()
-		}
-		utils.RemoveContainer(context.Background(),s.DockerCli,container.ID)
-	}
-
-	// Close Peerconnection
-	peerConnection.Close()
+	// Cleanup
+	Cleanup(cancelStream,container,s.DockerCli,peer.PC)
 
 }
-
 
 func main() {
 	cli,err := client.NewClientWithOpts(client.FromEnv,client.WithAPIVersionNegotiation())

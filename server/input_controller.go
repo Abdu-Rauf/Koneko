@@ -102,6 +102,3 @@ func (c *Container) MouseClick(button int) error {
     cmd := exec.Command("docker", "exec", c.ID, "xdotool", "click", buttstr)
     return cmd.Run()
 }
-// func (c *Container) Cleanup() error{
-// 	// save user info and remove the container
-// }

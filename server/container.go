@@ -1,11 +1,13 @@
-package utils
+package main
 
 import (
-    "fmt"
+	"log"
+	"github.com/pion/webrtc/v3"
 	"context"
+	"github.com/docker/docker/client"
+	"fmt"
 	containerTypes "github.com/docker/docker/api/types/container"
 	"time"
-	"github.com/docker/docker/client"
 )
 
 func StartContainer(ctx context.Context,cli *client.Client, browser string) (string,string,string,error){
@@ -47,6 +49,7 @@ func StartContainer(ctx context.Context,cli *client.Client, browser string) (str
 
 }
 
+
 func RemoveContainer(ctx context.Context ,cli *client.Client ,containerID string) error {
 
 	rtx,rcancel := context.WithTimeout(ctx,10*time.Second)
@@ -55,4 +58,36 @@ func RemoveContainer(ctx context.Context ,cli *client.Client ,containerID string
 		return fmt.Errorf("Error Stopping the Container %w",err)
 	}
 	return nil
+}
+
+
+func ContainerSetup(videoTrack *webrtc.TrackLocalStaticSample, browser string, dockerCli *client.Client,) (*Container , context.CancelFunc, error){
+
+	log.Println("Starting Container")
+	containerID,image,streamURL, err := StartContainer(context.Background(),dockerCli,browser)
+
+	if err != nil {
+		log.Println("Failed to start container:", err)
+		return nil,nil,err
+	}
+	container := &Container{
+		ID : containerID,
+		Address:streamURL,
+		Image: image,
+	}
+	// Connect server to the Conatiner 
+	err = container.Connect()
+	if err!=nil{
+		log.Println("Error connecting to the container",err)
+		return nil,nil,err
+	}
+	log.Println("Container is Ready",container)
+
+	// Create context (holy)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// start sending video streams to the client
+	go StartStreaming(container,ctx,videoTrack)
+	
+	return container,cancel,nil
 }
