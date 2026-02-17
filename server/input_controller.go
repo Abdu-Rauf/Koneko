@@ -100,30 +100,11 @@ func (c *Container) StreamVid(ctx context.Context, videoTrack *webrtc.TrackLocal
     }
 }
 
-func (c *Container ) MouseMove(x,y int) error{
-	cmd := exec.Command("docker","exec",c.ID,"xdotool","mousemove","--sync",strconv.Itoa(x),strconv.Itoa(y))
-	return cmd.Run()
-}
+func (c *Container) ForwardAgent(data *DataChannelInputs) error {
 
-func (c *Container ) KeyPress(key string) error{
-	cmd := exec.Command("docker","exec",c.ID,"xdotool","key",key)
-	return cmd.Run()
-}
-func (c *Container) MouseClick(button int) error {
-    var buttstr string
-    
-    switch button {
-    case 0:
-        buttstr = "1"  // Left click
-    case 1:
-        buttstr = "2"  // Middle click
-    case 2:
-        buttstr = "3"  // Right click
-    default:
-        log.Printf("Unknown mouse button: %d, defaulting to left click", button)
-        buttstr = "1"
+    if c.agentEncoder == nil {
+        return fmt.Errorf("agent encoder not found, is the agent connected?")
     }
-    
-    cmd := exec.Command("docker", "exec", c.ID, "xdotool", "click", buttstr)
-    return cmd.Run()
+    // converts the struct to JSON and writes it to the conn
+    return c.agentEncoder.Encode(data)
 }
