@@ -2,13 +2,13 @@ package main
 
 import (
     "log"
-    "encoding/json"
     "github.com/gorilla/websocket"
     "github.com/pion/webrtc/v3"
 	"sync"
     "time"
     "os"
     "fmt"
+    "github.com/buger/jsonparser"
     
 )
 var once sync.Once
@@ -39,28 +39,27 @@ func PeerSetup(conn *websocket.Conn ,csvFile *os.File) (*PeerSession, error) {
         })
 
         dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-            // log.Println("Received:", string(msg.Data))
 
-            var resp struct {
-                Type string `json:"type"`
-                Latency int64 `json:"latency"`
-                Seq int `json:"seq"`
-                Ts int64 `json:"ts"`
+            msgType, err := jsonparser.GetString(msg.Data, "type")
+            if err != nil || msgType != "benchmark_ack" {
+                return
             }
-            json.Unmarshal(msg.Data, &resp)
+            // 2. Grab the numbers directly from the byte slice
+            // No Unmarshal, no reflection, no allocations.
+            seq, _ := jsonparser.GetInt(msg.Data, "seq")
+            ts, _ := jsonparser.GetInt(msg.Data, "ts")
+            latency, _ := jsonparser.GetInt(msg.Data, "latency")
 
-            if resp.Type == "benchmark_ack"{
-                now := time.Now().UnixMicro()
-                totalDrift:= now-resp.Ts
+            now := time.Now().UnixMicro()
+            totalDrift := now - ts
 
-                // Append row in the file
-                fmt.Fprintf(csvFile, "%f,%d,%.2f,%.2f\n", 
-                    float64(now)/1000000.0, 
-                    resp.Seq, 
-                    float64(resp.Latency)/1000.0, 
-                    float64(totalDrift)/1000.0)
-            } 
-
+            // Append row in the file
+            fmt.Fprintf(csvFile, "%f,%d,%.2f,%.2f\n",
+            float64(now)/1000000.0,
+            seq,
+            float64(latency)/1000.0,
+            float64(totalDrift)/1000.0,
+            )        
         })
         dc.OnClose(func() {
             log.Println("Data channel closed")
