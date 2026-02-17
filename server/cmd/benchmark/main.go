@@ -11,7 +11,7 @@ var videoStarted = make(chan struct{})
 func main(){
     
     // create csv file writer
-    f, err := os.Create("client_results.csv")
+    f, err := os.Create("agent_socket.csv")
     if err != nil {
         log.Fatal("Could not create CSV file")
     }

@@ -1,10 +1,13 @@
 package main
 
 import (
-	"log"
+    "fmt"
+    "log"
+    "time"
+    "github.com/pion/webrtc/v3" 
 )
 
-func ForwardUserInputs(data *DataChannelInputs, dataChannelReady chan struct{}, container *Container) {
+func ForwardUserInputs(data *DataChannelInputs, dataChannelReady chan struct{}, container *Container,dc *webrtc.DataChannel) {
 	// Send Signal to close ws
     if data.Type == "dc_ready" {
         log.Println("Data Channel established and synchronized")
@@ -29,9 +32,9 @@ func ForwardUserInputs(data *DataChannelInputs, dataChannelReady chan struct{}, 
         log.Println("Forwarding Error:", err)
     }
 	msg := fmt.Sprintf(`{"type":"benchmark_ack","latency":%d,"seq":%d,"ts":%d}`,
-	time.Since(start).Microseconds(),
-	data.Seq,
-	data.Ts,
-	dc.SendText(msg)
-)
+        time.Since(start).Microseconds(),
+        data.Seq,
+        data.Ts,
+        )
+    dc.SendText(msg)
 }
