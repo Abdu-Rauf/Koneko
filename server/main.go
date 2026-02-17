@@ -40,7 +40,7 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	// Signal Channels for closing ws and peer
 	connectionClosed := make(chan struct{})
 	dataChannelReady := make(chan struct{})
-	// containerReady := make(chan struct{})
+	containerReady := make(chan struct{})
 
 	// Necessary for Cleanup
 	var container *Container
@@ -71,6 +71,7 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Start Container Setup In a Routine
 	go func(){
+		defer close(containerReady)
 		c,cs,err := ContainerSetup(videoTrack,browserMsg.Browser,s.DockerCli)
 		if err!=nil{
 			log.Println("Error Setting Up Container")
@@ -92,6 +93,7 @@ func (s *Server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Attach DataChannel Listeners For User Input Forwarding
 	AttachDcListeners(
+		containerReady,
 		peer.DC,
 		&container,
 		dataChannelReady,

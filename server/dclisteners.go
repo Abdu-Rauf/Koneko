@@ -9,6 +9,7 @@ import (
 
 
 func AttachDcListeners(
+    containerReady chan struct{},
     dc *webrtc.DataChannel,
     container **Container,
     dataChannelReady chan struct{},
@@ -27,7 +28,7 @@ func AttachDcListeners(
             return
         default:
         }
-
+        <-containerReady
         var data DataChannelInputs
         if err := json.Unmarshal(msg.Data, &data); err != nil {
             log.Println("Error parsing message:", err)
