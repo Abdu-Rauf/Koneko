@@ -5,32 +5,34 @@ import (
     "fmt"
     "log"
     "net"
-    "os/exec"
-    "strconv"
     "time"
     "github.com/asticode/go-astits"
     "github.com/pion/webrtc/v3"
     "github.com/pion/webrtc/v3/pkg/media"   
     "context"
+    "encoding/json"
 )
 
 type Container struct {
 	ID string
 	Image string
 	Address string
+    AgentAddress string
 	Conn net.Conn
+    InputConn net.Conn
+    agentEncoder *json.Encoder
 }
 
 
 func (c *Container) Connect() error {
-    log.Println("Attempting to connect to container:", c.Address)
+    log.Println("Attempting to connect to Vidstream:", c.Address)
     
     maxRetries := 20
     for i := 0; i < maxRetries; i++ {
         conn, err := net.DialTimeout("tcp", c.Address, 1*time.Second)
         if err == nil {
             c.Conn = conn
-            log.Println("Connected to container:", c.ID)
+            log.Println("Connected to vidstream:", c.ID)
             return nil 
         }
         
@@ -40,6 +42,29 @@ func (c *Container) Connect() error {
     
     return fmt.Errorf("failed to connect after %d attempts", maxRetries)
 }
+
+func (c *Container) AgentConnect() error{
+
+    log.Println("Attempting to connect to Agent:", c.AgentAddress)
+    
+    maxRetries := 20
+    for i := 0; i < maxRetries; i++ {
+        conn, err := net.DialTimeout("tcp", c.AgentAddress, 1*time.Second)
+        if err == nil {
+            // save the connection and encoder
+            c.InputConn = conn
+            c.agentEncoder = json.NewEncoder(conn)
+            log.Println("Connected to Agent:", c.ID)
+            return nil 
+        }
+        
+        log.Printf("Connection attempt %d/%d failed, retrying...", i+1, maxRetries)
+        time.Sleep(500 * time.Millisecond)
+    }
+    
+    return fmt.Errorf("failed to connect after %d attempts", maxRetries)
+}
+
 func (c *Container) StreamVid(ctx context.Context, videoTrack *webrtc.TrackLocalStaticSample) error{
     bufferedReader := bufio.NewReaderSize(c.Conn, 188*1024)
     demuxer := astits.NewDemuxer(ctx, bufferedReader)
@@ -75,30 +100,11 @@ func (c *Container) StreamVid(ctx context.Context, videoTrack *webrtc.TrackLocal
     }
 }
 
-func (c *Container ) MouseMove(x,y int) error{
-	cmd := exec.Command("docker","exec",c.ID,"xdotool","mousemove","--sync",strconv.Itoa(x),strconv.Itoa(y))
-	return cmd.Run()
-}
+func (c *Container) ForwardAgent(data *DataChannelInputs) error {
 
-func (c *Container ) KeyPress(key string) error{
-	cmd := exec.Command("docker","exec",c.ID,"xdotool","key",key)
-	return cmd.Run()
-}
-func (c *Container) MouseClick(button int) error {
-    var buttstr string
-    
-    switch button {
-    case 0:
-        buttstr = "1"  // Left click
-    case 1:
-        buttstr = "2"  // Middle click
-    case 2:
-        buttstr = "3"  // Right click
-    default:
-        log.Printf("Unknown mouse button: %d, defaulting to left click", button)
-        buttstr = "1"
+    if c.agentEncoder == nil {
+        return fmt.Errorf("agent encoder not found, is the agent connected?")
     }
-    
-    cmd := exec.Command("docker", "exec", c.ID, "xdotool", "click", buttstr)
-    return cmd.Run()
+    // converts the struct to JSON and writes it to the conn
+    return c.agentEncoder.Encode(data)
 }

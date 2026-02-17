@@ -19,11 +19,17 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
+
+COPY containers/koneko-agent /usr/local/bin/koneko-agent
+
+RUN chmod +x /usr/local/bin/koneko-agent
+
 ENV DISPLAY=:99
-EXPOSE 8080
+EXPOSE 8080 5050
 
 
 CMD Xvfb :99 -screen 0 1920x1080x24 & \
+    /usr/local/bin/koneko-agent & \
     google-chrome \
     --no-sandbox \
     --disable-dev-shm-usage \
