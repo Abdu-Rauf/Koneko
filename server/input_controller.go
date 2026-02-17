@@ -16,7 +16,9 @@ type Container struct {
 	ID string
 	Image string
 	Address string
+    AgentAddress string
 	Conn net.Conn
+    InputConn net.Conn
 }
 
 
