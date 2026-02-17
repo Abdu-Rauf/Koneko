@@ -5,8 +5,6 @@ import (
     "fmt"
     "log"
     "net"
-    "os/exec"
-    "strconv"
     "time"
     "github.com/asticode/go-astits"
     "github.com/pion/webrtc/v3"
@@ -23,14 +21,14 @@ type Container struct {
 
 
 func (c *Container) Connect() error {
-    log.Println("Attempting to connect to container:", c.Address)
+    log.Println("Attempting to connect to Vidstream:", c.Address)
     
     maxRetries := 20
     for i := 0; i < maxRetries; i++ {
         conn, err := net.DialTimeout("tcp", c.Address, 1*time.Second)
         if err == nil {
             c.Conn = conn
-            log.Println("Connected to container:", c.ID)
+            log.Println("Connected to vidstream:", c.ID)
             return nil 
         }
         
@@ -40,6 +38,29 @@ func (c *Container) Connect() error {
     
     return fmt.Errorf("failed to connect after %d attempts", maxRetries)
 }
+
+func (c *Container) AgentConnect() error{
+
+    log.Println("Attempting to connect to Agent:", c.AgentAddress)
+    
+    maxRetries := 20
+    for i := 0; i < maxRetries; i++ {
+        conn, err := net.DialTimeout("tcp", c.AgentAddress, 1*time.Second)
+        if err == nil {
+            // save the connection and encoder
+            c.InputConn = conn
+            c.agentEncoder = json.NewEncoder(conn)
+            log.Println("Connected to Agent:", c.ID)
+            return nil 
+        }
+        
+        log.Printf("Connection attempt %d/%d failed, retrying...", i+1, maxRetries)
+        time.Sleep(500 * time.Millisecond)
+    }
+    
+    return fmt.Errorf("failed to connect after %d attempts", maxRetries)
+}
+
 func (c *Container) StreamVid(ctx context.Context, videoTrack *webrtc.TrackLocalStaticSample) error{
     bufferedReader := bufio.NewReaderSize(c.Conn, 188*1024)
     demuxer := astits.NewDemuxer(ctx, bufferedReader)
