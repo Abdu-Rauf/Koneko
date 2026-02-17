@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-func StartContainer(ctx context.Context,cli *client.Client, browser string) (string,string,string,error){
+func StartContainer(ctx context.Context,cli *client.Client, browser string) (string,string,string,string,error){
 	var image string
 	
 	switch browser{
 	case "chrome":
-		image = "koneko-chrome:3.0"
-	case "firefox":
+		image = "koneko-chrome:5.0"
+	case "firefox": 
 		image = "koneko-firefox:1.0"
 	}
 	
@@ -31,21 +31,22 @@ func StartContainer(ctx context.Context,cli *client.Client, browser string) (str
 	}
 	resp,err := cli.ContainerCreate(stx,config,hostconfig,nil,nil,"")
 	if err!=nil{
-		return "","","",fmt.Errorf(`Error Creating Conatainer %w`,err)
+		return "","","","",fmt.Errorf(`Error Creating Conatainer %w`,err)
 	}
 	if err = cli.ContainerStart(stx,resp.ID,containerTypes.StartOptions{}); err!=nil{
-		return "","","",fmt.Errorf(`Error Starting Conatainer %w`,err)
+		return "","","","",fmt.Errorf(`Error Starting Conatainer %w`,err)
 
 	}
 	containerJSON, err := cli.ContainerInspect(stx,resp.ID)
 
 	if containerJSON.NetworkSettings.IPAddress == "" {
-        return "","", "", fmt.Errorf("container started but has no IP address")
+        return "","","", "", fmt.Errorf("container started but has no IP address")
     }
 
 	streamURL := fmt.Sprintf(`%s:8080`,containerJSON.NetworkSettings.IPAddress)
+	AgentURL := fmt.Sprintf(`%s:5050`,containerJSON.NetworkSettings.IPAddress)
 
-	return resp.ID,image,streamURL ,nil
+	return resp.ID,image,streamURL,AgentURL,nil
 
 }
 
@@ -64,7 +65,7 @@ func RemoveContainer(ctx context.Context ,cli *client.Client ,containerID string
 func ContainerSetup(videoTrack *webrtc.TrackLocalStaticSample, browser string, dockerCli *client.Client,) (*Container , context.CancelFunc, error){
 
 	log.Println("Starting Container")
-	containerID,image,streamURL, err := StartContainer(context.Background(),dockerCli,browser)
+	containerID,image,streamURL,AgentURL,err := StartContainer(context.Background(),dockerCli,browser)
 
 	if err != nil {
 		log.Println("Failed to start container:", err)
@@ -74,15 +75,23 @@ func ContainerSetup(videoTrack *webrtc.TrackLocalStaticSample, browser string, d
 		ID : containerID,
 		Address:streamURL,
 		Image: image,
+		AgentAddress: AgentURL,
 	}
-	// Connect server to the Conatiner 
+	// Connect server to the VideoStream
 	err = container.Connect()
 	if err!=nil{
-		log.Println("Error connecting to the container",err)
+		log.Println("Failed To Connect VideoStream",err)
 		return nil,nil,err
 	}
-	log.Println("Container is Ready",container)
+	log.Println("VideoStream connection established",container)
 
+	// Connect with InputAgent
+	err = container.AgentConnect()
+	if err!=nil{
+		log.Println("Failed To Connect With Agent",err)
+		container.Conn.Close()
+		return nil,nil,err
+	}
 	// Create context (holy)
 	ctx, cancel := context.WithCancel(context.Background())
 
