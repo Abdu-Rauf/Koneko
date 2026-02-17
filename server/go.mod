@@ -12,6 +12,7 @@ require (
 require (
 	github.com/Microsoft/go-winio v0.4.21 // indirect
 	github.com/asticode/go-astikit v0.30.0 // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
