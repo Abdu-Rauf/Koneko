@@ -4,44 +4,27 @@ import (
 	"log"
 )
 
-func ForwardUserInputs(data *DataChannelInputs, dataChannelReady chan struct{}, container *Container){
+func ForwardUserInputs(data *DataChannelInputs, dataChannelReady chan struct{}, container *Container) {
+	// Send Signal to close ws
+    if data.Type == "dc_ready" {
+        log.Println("Data Channel established and synchronized")
+ 
+        select {
+        case <-dataChannelReady:
+        default:
+            close(dataChannelReady)
+        }
+        return
+    }
 
-	// Launch the container based on selected browser image
-	switch data.Type {
-	case "dc_ready":
-		log.Println("Data Channel established")
-		close(dataChannelReady)
-	case "mouse_move":
-		if container!=nil{
-			err := container.MouseMove(data.X,data.Y)
-			if err!=nil{
-				log.Println("Error moving mouse",err)
-				return 
-			}
+	// If setup failed, container is nil even if channel is closed, used defer(containerready)
+    if container == nil {
+        return 
+    }
 
-		}
-	case "key_press":
-		if container!=nil{
-			err := container.KeyPress(data.Key)
-			if err!=nil{
-				log.Println("Error moving mouse",err)
-				return 
-			}
+    // Handle Agent Forwarding
 
-		}
-		
-	case "mouse_click":
-		if container!=nil{
-			err := container.MouseClick(data.Click)
-			if err!=nil{
-				log.Println("Error moving mouse",err)
-				return 
-			}
-
-		}
-	default:
-		log.Println("Unkown message type",data.Type)
-		return
-
-	}
+    if err := container.ForwardAgent(data); err != nil {
+        log.Println("Forwarding Error:", err)
+    }
 }
