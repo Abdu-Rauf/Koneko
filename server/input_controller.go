@@ -10,6 +10,7 @@ import (
     "github.com/pion/webrtc/v3"
     "github.com/pion/webrtc/v3/pkg/media"   
     "context"
+    "encoding/json"
 )
 
 type Container struct {
@@ -19,6 +20,7 @@ type Container struct {
     AgentAddress string
 	Conn net.Conn
     InputConn net.Conn
+    agentEncoder *json.Encoder
 }
 
 
