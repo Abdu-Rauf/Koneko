@@ -43,10 +43,27 @@ func (p *Predictor) Predict(currX, currY float64) (float64, float64) {
 	// Velocity = (NewPos - OldPos) / TimeElapsed
 	vx := (newest.X - oldest.X) / dt
 	vy := (newest.Y - oldest.Y) / dt
+	
+	speed := math.Sqrt(vx*vx + vy*vy)
+	
+	// Return base values if speed is very less
+	if speed < 0.1{
+		return currX,currY
+	}
+	// damp horizon value base on speed of mouse
+	dampedHorizon := p.Horizon
+	if speed < 1.0 {
+		dampedHorizon = p.Horizon * speed
+	}
 
 	// Future = Current + (Velocity * NetworkDelay)
-	predX := currX + (vx * p.Horizon)
-	predY := currY + (vy * p.Horizon)
+	predX := currX + (vx * dampedHorizon)
+	predY := currY + (vy * dampedHorizon)
+
+	dist := math.Sqrt(math.Pow(predX-currX, 2) + math.Pow(predY-currY, 2))
+	if dist > 150 {
+		return currX, currY
+	}
 
 	return predX, predY
 }
