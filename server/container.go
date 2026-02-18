@@ -76,7 +76,6 @@ func ContainerSetup(videoTrack *webrtc.TrackLocalStaticSample, browser string, d
 		Address:streamURL,
 		Image: image,
 		AgentAddress: AgentURL,
-		MousePredictor: NewPredictor(50.0),
 	}
 	// Connect server to the VideoStream
 	err = container.Connect()

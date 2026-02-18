@@ -21,7 +21,6 @@ type Container struct {
 	Conn net.Conn
     InputConn net.Conn
     agentEncoder *json.Encoder
-    MousePredictor *Predictor
 }
 
 
@@ -105,13 +104,6 @@ func (c *Container) ForwardAgent(data *DataChannelInputs) error {
 
     if c.agentEncoder == nil {
         return fmt.Errorf("agent encoder not found, is the agent connected?")
-    }
-    if data.Type == "mouse_move" && c.MousePredictor != nil {
-        px, py := c.MousePredictor.Predict(float64(data.X), float64(data.Y))
-        
-        // Update the struct before sending
-        data.X = int(px)
-        data.Y = int(py)
     }
     // converts the struct to JSON and writes it to the conn
     return c.agentEncoder.Encode(data)
