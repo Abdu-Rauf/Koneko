@@ -31,10 +31,13 @@ func ForwardUserInputs(data *DataChannelInputs, dataChannelReady chan struct{}, 
     if err := container.ForwardAgent(data); err != nil {
         log.Println("Forwarding Error:", err)
     }
-	msg := fmt.Sprintf(`{"type":"benchmark_ack","latency":%d,"seq":%d,"ts":%d}`,
+
+    msg := fmt.Sprintf(`{"type":"benchmark_ack","latency":%d,"seq":%d,"ts":%d,"x":%d,"y":%d}`,
         time.Since(start).Microseconds(),
         data.Seq,
         data.Ts,
-        )
+        data.X, 
+        data.Y,
+        )  
     dc.SendText(msg)
 }

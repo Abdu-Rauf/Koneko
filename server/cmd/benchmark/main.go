@@ -18,7 +18,7 @@ func main(){
     defer f.Close()
 
     // Write the Header
-    f.WriteString("timestamp,seq,latency_ms,drift_ms\n")
+    f.WriteString("timestamp,seq,x,y,latency_ms,drift_ms\n")
 
     // connect to server and select browser
     conn,_,err:= websocket.DefaultDialer.Dial("ws://localhost:8080/ws",nil)

@@ -49,14 +49,18 @@ func PeerSetup(conn *websocket.Conn ,csvFile *os.File) (*PeerSession, error) {
             seq, _ := jsonparser.GetInt(msg.Data, "seq")
             ts, _ := jsonparser.GetInt(msg.Data, "ts")
             latency, _ := jsonparser.GetInt(msg.Data, "latency")
+            x, _ := jsonparser.GetInt(msg.Data, "x")
+            y, _ := jsonparser.GetInt(msg.Data, "y")
 
             now := time.Now().UnixMicro()
             totalDrift := now - ts
 
             // Append row in the file
-            fmt.Fprintf(csvFile, "%f,%d,%.2f,%.2f\n",
+            fmt.Fprintf(csvFile, "%f,%d,%d,%d,%.2f,%.2f\n",
             float64(now)/1000000.0,
             seq,
+            x,
+            y,
             float64(latency)/1000.0,
             float64(totalDrift)/1000.0,
             )        
