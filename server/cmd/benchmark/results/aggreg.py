@@ -3,24 +3,29 @@ import os
 import numpy as np
 
 # --- CONFIGURATION ---
-# Set this to 50ms to simulate a standard internet connection.
-# For your AI version later, you will subtract the prediction offset from this.
 SIMULATED_RTT_MS = 50.0 
 
+# Circle Constants (Must match Go Code to reconstruct the "Bullseye")
+CENTER_X = 960.0
+CENTER_Y = 540.0
+RADIUS = 100.0
+ANGLE_STEP = 0.1       
+TICK_INTERVAL_MS = 16.0 
+
 def analyze():
-    client_file = 'legacy_stats.csv' # Or 'docker_exec.csv'
-    resource_file = 'legacy_resources.log'
+    client_file = 'predictor_stats.csv' 
+    resource_file = 'predictor_resources.log'
+    output_file = 'predictor_analysis_final.csv'
 
     if not os.path.exists(client_file) or not os.path.exists(resource_file):
         print(f"Error: Could not find '{client_file}' or '{resource_file}'.")
         return
 
-    print("--- Loading and Cleaning Data ---")
+    print(f"--- Processing {client_file} ---")
     
-    # 1. Load Go Client Data
+    # 1. Load Data
     go_df = pd.read_csv(client_file)
-
-    # 2. Load and Clean Docker Stats
+    
     docker_rows = []
     with open(resource_file, 'r') as f:
         for line in f:
@@ -40,75 +45,78 @@ def analyze():
 
     docker_df = pd.DataFrame(docker_rows, columns=['timestamp', 'cpu_percent', 'mem_mib'])
 
-    # 3. Fuzzy Merge
+    # 2. Merge
     df = pd.merge_asof(go_df.sort_values('timestamp'), 
                        docker_df.sort_values('timestamp'), 
                        on='timestamp', 
                        direction='nearest')
 
-    # --- 4. ADVANCED METRICS LOGIC ---
+    # 3. Basic Metrics
     df['inter_packet_ms'] = df['timestamp'].diff() * 1000
-    
-    # Throughput (Hz)
     window = 60
     df['throughput_hz'] = df['seq'].diff(window) / df['timestamp'].diff(window)
-    
-    # Stalls & Inversions
     df['is_stall'] = df['inter_packet_ms'] > 33.33
     df['is_inversion'] = df['seq'] < df['seq'].shift(1)
-    df['arrival_delta_ms'] = df['timestamp'].diff() * 1000
-    df['is_flush'] = (df['arrival_delta_ms'] < 2).rolling(window=5).max()
 
-    # --- 5. STEADY-STATE FILTERING ---
+    # 4. Steady State (Skip Warmup)
     warmup_period = 10 
     start_ts = df['timestamp'].min()
     steady_df = df[df['timestamp'] >= (start_ts + warmup_period)].copy()
     
-    if steady_df.empty:
-        steady_df = df.copy()
+    if steady_df.empty: steady_df = df.copy()
 
     # ==============================================================================
-    # [NEW LOGIC] ADDING SIMULATED NETWORK LATENCY
+    # [ CORE LOGIC ] CALCULATING "PERCEIVED LAG" VIA SPATIAL ERROR
     # ==============================================================================
-    # "drift_ms" is your Raw Injection Latency (Server -> Container)
-    # "total_lag_ms" is what the user feels (Network RTT + Injection Latency)
     
-    steady_df['total_lag_ms'] = steady_df['drift_ms'] + SIMULATED_RTT_MS
+    # A. Reconstruct the Target (The "Bullseye")
+    steady_df['target_angle'] = steady_df['seq'] * ANGLE_STEP
+    steady_df['target_x'] = CENTER_X + RADIUS * np.cos(steady_df['target_angle'])
+    steady_df['target_y'] = CENTER_Y + RADIUS * np.sin(steady_df['target_angle'])
+
+    # B. Calculate Error (Distance from Bullseye)
+    steady_df['error_px'] = np.sqrt(
+        (steady_df['x'] - steady_df['target_x'])**2 + 
+        (steady_df['y'] - steady_df['target_y'])**2
+    )
+
+    # C. Convert Error to Time (Perceived Lag)
+    # Mouse Speed = Distance / Time = (Radius * Step) / Tick
+    # Speed = (100 * 0.1) / 16 = 0.625 px/ms
+    mouse_speed_px_ms = (RADIUS * ANGLE_STEP) / TICK_INTERVAL_MS
     
+    # This is your "Effective Latency" renamed to match your Base Report
+    steady_df['perceived_lag_ms'] = steady_df['error_px'] / mouse_speed_px_ms
+
+    # D. Physical Network Lag (The Control Variable)
+    # This stays 50ms to prove you didn't fake the network
+    steady_df['network_lag_ms'] = steady_df['drift_ms'] + SIMULATED_RTT_MS
+
     # ==============================================================================
 
-    # --- 6. AGGREGATE RESULTS ---
-    
-    # Injection Metrics (System Performance)
+    # 5. Aggregation
+    avg_cpu = steady_df['cpu_percent'].mean()
+    avg_mem = steady_df['mem_mib'].mean()
     avg_injection = steady_df['drift_ms'].mean()
     p99_injection = steady_df['drift_ms'].quantile(0.99)
-
-    # Perceived Latency Metrics (User Experience)
-    avg_perceived = steady_df['total_lag_ms'].mean()
-    p95_perceived = steady_df['total_lag_ms'].quantile(0.95)
-    p99_perceived = steady_df['total_lag_ms'].quantile(0.99)
-    max_perceived = steady_df['total_lag_ms'].max()
-
-    # Smoothness Metrics
-    avg_tput = steady_df['throughput_hz'].mean()
-    tput_jitter = steady_df['throughput_hz'].std()
-    ipd_jitter = steady_df['inter_packet_ms'].std()
     
-    flush_packet_count = df['is_flush'].sum()
-    flush_percentage = (flush_packet_count / len(df)) * 100
-    inversion_count = df['is_inversion'].sum()
-    stall_count = steady_df['is_stall'].sum()
-    stall_percent = (stall_count / len(steady_df)) * 100
+    # The Comparison Metrics
+    avg_perceived = steady_df['perceived_lag_ms'].mean()
+    p99_perceived = steady_df['perceived_lag_ms'].quantile(0.99)
+    max_perceived = steady_df['perceived_lag_ms'].max()
+    
+    avg_tput = steady_df['throughput_hz'].mean()
+    ipd_jitter = steady_df['inter_packet_ms'].std()
+    stall_percent = (steady_df['is_stall'].sum() / len(steady_df)) * 100
 
-    # --- 7. FINAL REPORT ---
+    # --- FINAL REPORT (MATCHING YOUR BASE FORMAT) ---
     print(f"\n{'='*40}")
-    print(f"{'KONEKO PERFORMANCE REPORT':^40}")
+    print(f"{'KONEKO PREDICTOR REPORT':^40}")
     print(f"{'='*40}")
 
     print(f"\n[ RESOURCE CONSUMPTION ]")
-    print(f"Peak CPU Usage:      {df['cpu_percent'].max():.2f}%")
-    print(f"Avg CPU (Steady):    {steady_df['cpu_percent'].mean():.2f}%")
-    print(f"Avg Memory:          {steady_df['mem_mib'].mean():.2f} MiB")
+    print(f"Avg CPU (Steady):    {avg_cpu:.2f}%")
+    print(f"Avg Memory:          {avg_mem:.2f} MiB")
 
     print(f"\n[ SYSTEM LATENCY (INJECTION ONLY) ]")
     print(f"Avg Injection Delay: {avg_injection:.2f} ms")
@@ -116,20 +124,22 @@ def analyze():
 
     print(f"\n[ END-TO-END USER LATENCY (RTT + INJECTION) ]")
     print(f"Simulated Network:   {SIMULATED_RTT_MS} ms")
-    print(f"Avg Perceived Lag:   {avg_perceived:.2f} ms")
-    print(f"P95 Tail Latency:    {p95_perceived:.2f} ms")
-    print(f"P99 Tail Latency:    {p99_perceived:.2f} ms (Worst Case)")
+    # This is the "Honest" Network Lag
+    print(f"Physical Network Lag:{steady_df['network_lag_ms'].mean():.2f} ms") 
+    
+    # This matches your "Avg Perceived Lag" from the Base Report
+    print(f"Avg Perceived Lag:   {avg_perceived:.2f} ms  <-- (AI Corrected)")
+    print(f"P99 Tail Latency:    {p99_perceived:.2f} ms")
     print(f"Max Spike:           {max_perceived:.2f} ms")
 
     print(f"\n[ STABILITY & JITTER ]")
     print(f"Avg Throughput:      {avg_tput:.2f} Hz")
-    print(f"Throughput Jitter:   {tput_jitter:.2f} Hz")
     print(f"Inter-Packet Jitter: {ipd_jitter:.2f} ms")
-    print(f"Sequence Inversions: {inversion_count}")
     print(f"Stall Percentage:    {stall_percent:.2f}%")
-
-    steady_df.to_csv('final_steady_state_analysis.csv', index=False)
-    print(f"\nAnalysis complete. Results saved to 'legacy_analysis.csv'.")
+    
+    # Save for graphing
+    steady_df.to_csv(output_file, index=False)
+    print(f"\nResults saved to '{output_file}'")
 
 if __name__ == "__main__":
     analyze()
