@@ -2,27 +2,20 @@
 
 ## A Golang based Remote Browser Isolation (RBI) system, designed to analyze and minimize latency bottlenecks in video streaming
 
-Koneko explores different architectural strategies to implement a RBI system that is optimal in both latency and resource usage. Koneko is built primarily as a systems experiment to understand where latency actually comes from in modern RBI systems.The system has four core components:
+Koneko explores different architectural strategies to implement a RBI system that is optimal in both latency and resource usage built primarily as a systems experiment to understand where latency actually comes from in modern RBI systems. The system has four core components:
 
----
 
 ### Client
 
 A lightweight frontend with a dedicated JavaScript controller. The controller captures user inputs (keyboard/mouse/clicks) and forwards them to the server, while simultaneously receiving and rendering video packets via WebRTC DataChannels in an HTML video element.
 
----
-
 ### Containers
 
 Contains custom Docker images supporting chrome/firefox instances. High-performance video encoding is embedded directly within these images (using GStreamer).
 
----
-
 ### Server
 
 The Go-based orchestration layer and the heart of Koneko. This server manages the entire session lifecycle i.e., spinning up Docker containers, bridging input signals from the client to the browser instance, and routing compressed video packets back to the client.
-
----
 
 ### Benchmark
 
