@@ -179,7 +179,7 @@ WebRTC requires a secure context. Since this runs locally using HTTPS with self-
 
 ## Work in Progress / Changes to be made
 
-This project is still ongoing. The future roadmap can be divided into three phases. The development of Koneko is split into three stages addressing architectural constraints, system bottlenecks, and encoding efficiency.
+This project is still ongoing. The future roadmap can be divided into three phases addressing architectural constraints, system bottlenecks, and encoding efficiency.
 
 ---
 
