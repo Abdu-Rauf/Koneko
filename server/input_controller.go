@@ -108,7 +108,7 @@ func (c *Container) ForwardAgent(data *DataChannelInputs) error {
     }
     if data.Type == "mouse_move" && c.MousePredictor != nil {
         px, py := c.MousePredictor.Predict(float64(data.X), float64(data.Y))
-        
+        log.Println("using predictor")
         // Update the struct before sending
         data.X = int(px)
         data.Y = int(py)
