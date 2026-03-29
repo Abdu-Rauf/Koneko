@@ -1,8 +1,8 @@
 package main
 
 import (
-	"time"
 	"math"
+	"time"
 )
 
 type Point struct {
@@ -12,7 +12,7 @@ type Point struct {
 
 type Predictor struct {
 	History []Point
-	Horizon float64 
+	Horizon float64
 }
 
 func NewPredictor(horizon float64) *Predictor {
@@ -37,26 +37,26 @@ func (p *Predictor) Predict(currX, currY float64) (float64, float64) {
 
 	oldest := p.History[0]
 	newest := p.History[len(p.History)-1]
-	
-	dt := float64(newest.Ts - oldest.Ts)
-	if dt <= 0 { return currX, currY }
 
+	dt := float64(newest.Ts - oldest.Ts)
+	if dt <= 0 {
+		return currX, currY
+	}
 	// Velocity = (NewPos - OldPos) / TimeElapsed
 	vx := (newest.X - oldest.X) / dt
 	vy := (newest.Y - oldest.Y) / dt
-	
+
 	speed := math.Sqrt(vx*vx + vy*vy)
-	
+
 	// Return base values if speed is very less
-	if speed < 0.1{
-		return currX,currY
+	if speed < 0.1 {
+		return currX, currY
 	}
 	// damp horizon value base on speed of mouse
 	dampedHorizon := p.Horizon
 	if speed < 1.0 {
 		dampedHorizon = p.Horizon * speed
 	}
-
 	// Future = Current + (Velocity * NetworkDelay)
 	predX := currX + (vx * dampedHorizon)
 	predY := currY + (vy * dampedHorizon)
