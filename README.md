@@ -125,47 +125,17 @@ cd koneko
 
 ---
 
-### 2. Build the Browser Containers
+### 2. Run the Project
 
-Before the server can orchestrate sessions, build the custom Docker images that contain the browsers and encoding logic.
+Koneko uses a `Makefile` to automate installing dependencies, building the browser containers, and starting the server. Make sure your Docker daemon is running, then simply execute:
 
 ```bash
-cd containers
-
-# Build Chrome image
-docker build -t koneko-chrome -f Dockerfile.chrome .
-
-# Build Firefox image 
-docker build -t koneko-firefox -f Dockerfile.firefox .
-
-cd ..
+make run
 ```
 
 ---
 
-### 3. Install Server Dependencies
-
-Navigate to the server directory and download required Go modules.
-
-```bash
-cd server
-go mod tidy
-```
-
----
-
-### 4. Start the Koneko Server
-
-Run the Go orchestration server.  
-Make sure Docker is running so the server can spin up containers.
-
-```bash
-go run .
-```
-
----
-
-### 5. Access the Client
+### 3. Access the Client
 
 Open your browser and go to:
 
@@ -195,7 +165,6 @@ This project is still ongoing. The future roadmap can be divided into three phas
 
 3. **Automated Builds & Image Versioning**  
    Right now the Docker build process is handled pretty naively. Users have to manually run `docker build` commands, and there is no guarantee the built image version will match what the server expects.  
-   I have currently hardcoded the specific image version I have working into the Go server, which is definitely bad practice.  
    I plan to handle this properly by introducing environment variables for dynamic image tagging and automating the build/run setup (likely using a `Makefile` or Docker Compose).
 
 ---
