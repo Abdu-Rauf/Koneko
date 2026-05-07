@@ -158,14 +158,6 @@ This project is still ongoing. The future roadmap can be divided into three phas
 1. **Server Structure**  
    I am still in the middle of understanding/learning how Go servers should be structured, and that reflects in my current server directory (everything is in the `main` package). I plan to refactor the server directory to better align with standard Go project layouts.
 
-2. **Cross-Platform Container Builds**  
-   Currently, the `agent.go` binary is pre-compiled for a specific Linux architecture (`GOOS=linux GOARCH=amd64`).  
-   This breaks cross-platform compatibility and can force Docker into using slow CPU emulation on different machines.  
-   To fix this, I plan to implement multi-stage Docker builds so the agent compiles dynamically for the host’s native CPU architecture during the image build process.
-
-3. **Automated Builds & Image Versioning**  
-   Right now the Docker build process is handled pretty naively. Users have to manually run `docker build` commands, and there is no guarantee the built image version will match what the server expects.  
-   I plan to handle this properly by introducing environment variables for dynamic image tagging and automating the build/run setup (likely using a `Makefile` or Docker Compose).
 
 ---
 
