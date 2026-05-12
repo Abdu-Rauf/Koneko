@@ -1,1 +1,15 @@
-/go.mod
+# Compiled Go Binaries
+server/server
+agent/agent
+*.exe
+*.out
+bin/
+
+# Environment Variables
+.env
+
+# Editor and OS Junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

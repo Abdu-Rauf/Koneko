@@ -1,103 +1,102 @@
 package main
 
 import (
-	"log"
-	"github.com/pion/webrtc/v3"
 	"context"
-	"github.com/docker/docker/client"
 	"fmt"
-	containerTypes "github.com/docker/docker/api/types/container"
+	"log"
 	"time"
+
+	containerTypes "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"github.com/pion/webrtc/v3"
 )
 
-func StartContainer(ctx context.Context,cli *client.Client, browser string) (string,string,string,string,error){
+func StartContainer(ctx context.Context, cli *client.Client, browser string) (string, string, string, string, error) {
 	var image string
-	
-	switch browser{
+
+	switch browser {
 	case "chrome":
-		image = "koneko-chrome:5.0"
-	case "firefox": 
-		image = "koneko-firefox:1.0"
+		image = "koneko-chrome"
+	case "firefox":
+		image = "koneko-firefox"
 	}
-	
-	stx,scancel := context.WithTimeout(ctx, 10*time.Second)
-	defer scancel()	
+
+	stx, scancel := context.WithTimeout(ctx, 10*time.Second)
+	defer scancel()
 
 	config := &containerTypes.Config{
-		Image:image,
+		Image: image,
 	}
 	hostconfig := &containerTypes.HostConfig{
 		AutoRemove: true,
 	}
-	resp,err := cli.ContainerCreate(stx,config,hostconfig,nil,nil,"")
-	if err!=nil{
-		return "","","","",fmt.Errorf(`Error Creating Conatainer %w`,err)
+	resp, err := cli.ContainerCreate(stx, config, hostconfig, nil, nil, "")
+	if err != nil {
+		return "", "", "", "", fmt.Errorf(`Error Creating Conatainer %w`, err)
 	}
-	if err = cli.ContainerStart(stx,resp.ID,containerTypes.StartOptions{}); err!=nil{
-		return "","","","",fmt.Errorf(`Error Starting Conatainer %w`,err)
+	if err = cli.ContainerStart(stx, resp.ID, containerTypes.StartOptions{}); err != nil {
+		return "", "", "", "", fmt.Errorf(`Error Starting Conatainer %w`, err)
 
 	}
-	containerJSON, err := cli.ContainerInspect(stx,resp.ID)
+	containerJSON, err := cli.ContainerInspect(stx, resp.ID)
 
 	if containerJSON.NetworkSettings.IPAddress == "" {
-        return "","","", "", fmt.Errorf("container started but has no IP address")
-    }
+		return "", "", "", "", fmt.Errorf("container started but has no IP address")
+	}
 
-	streamURL := fmt.Sprintf(`%s:8080`,containerJSON.NetworkSettings.IPAddress)
-	AgentURL := fmt.Sprintf(`%s:5050`,containerJSON.NetworkSettings.IPAddress)
+	streamURL := fmt.Sprintf(`%s:8080`, containerJSON.NetworkSettings.IPAddress)
+	AgentURL := fmt.Sprintf(`%s:5050`, containerJSON.NetworkSettings.IPAddress)
 
-	return resp.ID,image,streamURL,AgentURL,nil
+	return resp.ID, image, streamURL, AgentURL, nil
 
 }
 
+func RemoveContainer(ctx context.Context, cli *client.Client, containerID string) error {
 
-func RemoveContainer(ctx context.Context ,cli *client.Client ,containerID string) error {
-
-	rtx,rcancel := context.WithTimeout(ctx,10*time.Second)
+	rtx, rcancel := context.WithTimeout(ctx, 10*time.Second)
 	defer rcancel()
-	if err := cli.ContainerStop(rtx,containerID,containerTypes.StopOptions{}); err !=nil{
-		return fmt.Errorf("Error Stopping the Container %w",err)
+	if err := cli.ContainerStop(rtx, containerID, containerTypes.StopOptions{}); err != nil {
+		return fmt.Errorf("Error Stopping the Container %w", err)
 	}
 	return nil
 }
 
-
-func ContainerSetup(videoTrack *webrtc.TrackLocalStaticSample, browser string, dockerCli *client.Client,) (*Container , context.CancelFunc, error){
+func ContainerSetup(videoTrack *webrtc.TrackLocalStaticSample, browser string, dockerCli *client.Client) (*Container, context.CancelFunc, error) {
 
 	log.Println("Starting Container")
-	containerID,image,streamURL,AgentURL,err := StartContainer(context.Background(),dockerCli,browser)
+	containerID, image, streamURL, AgentURL, err := StartContainer(context.Background(), dockerCli, browser)
 
 	if err != nil {
 		log.Println("Failed to start container:", err)
-		return nil,nil,err
+		return nil, nil, err
 	}
 	container := &Container{
-		ID : containerID,
-		Address:streamURL,
-		Image: image,
-		AgentAddress: AgentURL,
+		ID:             containerID,
+		Address:        streamURL,
+		Image:          image,
+		AgentAddress:   AgentURL,
 		MousePredictor: NewPredictor(50.0),
 	}
 	// Connect server to the VideoStream
 	err = container.Connect()
-	if err!=nil{
-		log.Println("Failed To Connect VideoStream",err)
-		return nil,nil,err
+	if err != nil {
+		log.Println("Failed To Connect VideoStream", err)
+		return nil, nil, err
 	}
-	log.Println("VideoStream connection established",container)
+	log.Println("VideoStream connection established", container)
 
 	// Connect with InputAgent
 	err = container.AgentConnect()
-	if err!=nil{
-		log.Println("Failed To Connect With Agent",err)
+	if err != nil {
+		log.Println("Failed To Connect With Agent", err)
 		container.Conn.Close()
-		return nil,nil,err
+		return nil, nil, err
 	}
 	// Create context (holy)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// start sending video streams to the client
-	go StartStreaming(container,ctx,videoTrack)
-	
-	return container,cancel,nil
+	go StartStreaming(container, ctx, videoTrack)
+
+	return container, cancel, nil
 }
